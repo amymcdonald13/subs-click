@@ -2,151 +2,133 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Interactive Subtitles with Tooltips</title>
+  <title>Interactive Subtitles</title>
   <style>
-    body {
-      background: #111;
-      color: #fff;
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-    }
-
-    .video-container {
-      position: relative;
-      width: 80%;
-      margin: 50px auto;
-    }
-
-    video {
-      width: 100%;
-      height: auto;
-      display: block;
-    }
-
-    .subtitles {
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #video-container { position: relative; max-width: 800px; margin: auto; }
+    #subtitle-box {
       position: absolute;
-      bottom: 10%;
-      left: 5%;
-      right: 5%;
+      bottom: 60px;
+      width: 100%;
       text-align: center;
-      font-size: 1.5em;
-      background: rgba(0, 0, 0, 0.6);
-      padding: 10px;
-      border-radius: 8px;
-      min-height: 2em;
+      color: white;
+      font-size: 1.2em;
+      text-shadow: 0px 0px 5px black;
     }
-
-    .tooltip-word {
-      color: #ffeb3b;
+    .highlight {
+      background-color: yellow;
       cursor: pointer;
       position: relative;
     }
-
-    .tooltip-popup {
-      position: absolute;
-      bottom: 150%;
-      left: 50%;
-      transform: translateX(-50%);
+    .tooltip {
+      visibility: hidden;
       background-color: #333;
       color: #fff;
-      padding: 6px 10px;
-      border-radius: 5px;
+      text-align: center;
+      border-radius: 4px;
+      padding: 5px;
+      position: absolute;
+      z-index: 1;
+      bottom: 125%;
+      left: 50%;
+      transform: translateX(-50%);
       white-space: nowrap;
-      z-index: 10;
-      opacity: 1;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .highlight:hover .tooltip,
+    .highlight.clicked .tooltip {
       visibility: visible;
-      transition: opacity 0.2s ease-in-out;
+      opacity: 1;
     }
   </style>
 </head>
 <body>
 
-  <div class="video-container">
-    <video id="video" controls>
-      <source src="your-video.mp4" type="video/mp4">
-      Your browser does not support HTML5 video.
-    </video>
+<div id="video-container">
+  <video id="video" width="800" controls>
+    <source src="video.mp4" type="video/mp4">
+    Your browser does not support the video tag.
+  </video>
+  <div id="subtitle-box"></div>
+</div>
 
-    <div class="subtitles" id="subtitleBox"></div>
-  </div>
+<script>
+const tooltipDictionary = {
+  "21": "His age.",
+  "dance": "A type of movement.",
+  "hello": "A greeting."
+};
 
-  <script>
-    const tooltipDict = {
-      "21": "His age",
-      "dance": "A type of movement",
-      "hello": "Greeting.",
-      "name": "A way to address someone."
-    };
+const srtUrl = 'subtitles.srt'; // URL or path to your .srt file
+const subtitleBox = document.getElementById('subtitle-box');
+const video = document.getElementById('video');
+let subtitles = [];
 
-    let subtitles = [];
+function fetchSRT(url) {
+  return fetch(url).then(res => res.text());
+}
 
-    function parseTimestamp(ts) {
-      const [h, m, s] = ts.split(":");
-      const [sec, ms] = s.split(",");
-      return parseInt(h) * 3600 + parseInt(m) * 60 + parseInt(sec) + parseInt(ms) / 1000;
-    }
-
-    fetch("subtitles.srt")
-      .then(response => response.text())
-      .then(data => {
-        const blocks = data.trim().split(/\r?\n\r?\n/);
-        subtitles = blocks.map(block => {
-          const lines = block.split(/\r?\n/);
-          const [start, end] = lines[1].split(" --> ").map(parseTimestamp);
-          const text = lines.slice(2).join(" ");
-          return { start, end, text };
-        });
-      });
-
-    const subtitleBox = document.getElementById("subtitleBox");
-    const video = document.getElementById("video");
-
-    video.addEventListener("timeupdate", () => {
-      const current = video.currentTime;
-      const active = subtitles.find(sub => current >= sub.start && current <= sub.end);
-      subtitleBox.innerHTML = active ? formatSubtitleWithTooltips(active.text) : "";
-      bindTooltipClicks(); // Rebind clicks after subtitle changes
+function parseSRT(data) {
+  const pattern = /(\d+)\s+(\d{2}:\d{2}:\d{2},\d{3})\s-->\s(\d{2}:\d{2}:\d{2},\d{3})\s+([\s\S]*?)(?=\n{2,}|$)/g;
+  const results = [];
+  let match;
+  while ((match = pattern.exec(data)) !== null) {
+    results.push({
+      start: srtTimeToSeconds(match[2]),
+      end: srtTimeToSeconds(match[3]),
+      text: match[4].replace(/\r\n|\r|\n/g, ' ')
     });
+  }
+  return results;
+}
 
-    function formatSubtitleWithTooltips(text) {
-      return text.split(/\b/).map(word => {
-        const clean = word.replace(/[^\w]/g, "").toLowerCase();
-        if (tooltipDict[clean]) {
-          return `<span class="tooltip-word" data-word="${clean}">${word}</span>`;
-        }
-        return word;
-      }).join("");
-    }
+function srtTimeToSeconds(time) {
+  const [h, m, s] = time.split(':');
+  const [secs, ms] = s.split(',');
+  return parseInt(h) * 3600 + parseInt(m) * 60 + parseInt(secs) + parseInt(ms) / 1000;
+}
 
-    function bindTooltipClicks() {
-      const words = subtitleBox.querySelectorAll('.tooltip-word');
+function highlightWords(text) {
+  for (const word in tooltipDictionary) {
+    const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\b(${escapedWord})\\b`, 'gi');
+    text = text.replace(regex, (match) => {
+      const tooltip = tooltipDictionary[match.toLowerCase()];
+      return `<span class="highlight" onclick="showTooltip(this, event)">
+                ${match}
+                <span class="tooltip">${tooltip}</span>
+              </span>`;
+    });
+  }
+  return text;
+}
 
-      words.forEach(span => {
-        span.addEventListener('click', function (e) {
-          video.pause();
+function showTooltip(el, event) {
+  event.stopPropagation();
+  video.pause();
+  el.classList.add('clicked');
+}
 
-          // Remove any existing tooltips
-          document.querySelectorAll('.tooltip-popup').forEach(p => p.remove());
+function updateSubtitle() {
+  const currentTime = video.currentTime;
+  const currentSubtitle = subtitles.find(s => currentTime >= s.start && currentTime <= s.end);
+  subtitleBox.innerHTML = currentSubtitle ? highlightWords(currentSubtitle.text) : '';
+}
 
-          const word = span.dataset.word;
-          const tooltipText = tooltipDict[word];
+// Remove "clicked" class when clicking elsewhere
+document.body.addEventListener('click', () => {
+  document.querySelectorAll('.highlight.clicked').forEach(el => el.classList.remove('clicked'));
+});
 
-          const tooltip = document.createElement('div');
-          tooltip.className = 'tooltip-popup';
-          tooltip.innerText = tooltipText;
+video.addEventListener('timeupdate', updateSubtitle);
 
-          span.appendChild(tooltip);
-
-          // Optional: hide tooltip on second click
-          span.addEventListener('click', function removeTooltip(e2) {
-            tooltip.remove();
-            span.removeEventListener('click', removeTooltip);
-          }, { once: true });
-        });
-      });
-    }
-  </script>
+// Initialize
+fetchSRT(srtUrl)
+  .then(data => {
+    subtitles = parseSRT(data);
+  });
+</script>
 
 </body>
 </html>
