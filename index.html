@@ -4,131 +4,129 @@
   <meta charset="UTF-8">
   <title>Interactive Subtitles</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    #video-container { position: relative; max-width: 800px; margin: auto; }
-    #subtitle-box {
-      position: absolute;
-      bottom: 60px;
-      width: 100%;
-      text-align: center;
+    #subtitle {
+      margin-top: 10px;
+      font-size: 20px;
       color: white;
-      font-size: 1.2em;
-      text-shadow: 0px 0px 5px black;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      width: 640px;
+      position: relative;
     }
+
     .highlight {
-      background-color: yellow;
+      color: yellow;
       cursor: pointer;
       position: relative;
     }
+
     .tooltip {
-      visibility: hidden;
-      background-color: #333;
-      color: #fff;
-      text-align: center;
-      border-radius: 4px;
-      padding: 5px;
+      display: none;
       position: absolute;
-      z-index: 1;
-      bottom: 125%;
-      left: 50%;
-      transform: translateX(-50%);
+      bottom: 100%;
+      left: 0;
+      background: #333;
+      color: white;
+      padding: 5px;
+      border-radius: 5px;
       white-space: nowrap;
-      opacity: 0;
-      transition: opacity 0.3s;
+      z-index: 10;
     }
-    .highlight:hover .tooltip,
-    .highlight.clicked .tooltip {
-      visibility: visible;
-      opacity: 1;
+
+    .highlight:hover .tooltip {
+      display: block;
+    }
+
+    video {
+      display: block;
     }
   </style>
 </head>
-<body>
+<body style="background: black; font-family: sans-serif;">
 
-<div id="video-container">
-  <video id="video" width="800" controls>
+  <video id="video" width="640" controls>
     <source src="video.mp4" type="video/mp4">
-    Your browser does not support the video tag.
+    Your browser does not support HTML5 video.
   </video>
-  <div id="subtitle-box"></div>
-</div>
 
-<script>
-const tooltipDictionary = {
-  "21": "His age.",
-  "dance": "A type of movement.",
-  "hello": "A greeting."
-};
+  <div id="subtitle"></div>
 
-const srtUrl = 'subtitles.srt'; // URL or path to your .srt file
-const subtitleBox = document.getElementById('subtitle-box');
-const video = document.getElementById('video');
-let subtitles = [];
+  <script>
+    const video = document.getElementById('video');
+    const subtitleDiv = document.getElementById('subtitle');
 
-function fetchSRT(url) {
-  return fetch(url).then(res => res.text());
-}
+    // Tooltip dictionary (term: explanation)
+    const tooltipDict = {
+      "photosynthesis": "Photosynthesis is the process by which plants make food using sunlight.",
+      "mitochondria": "Known as the powerhouse of the cell.",
+      "neuron": "A neuron is a nerve cell that transmits signals in the body."
+    };
 
-function parseSRT(data) {
-  const pattern = /(\d+)\s+(\d{2}:\d{2}:\d{2},\d{3})\s-->\s(\d{2}:\d{2}:\d{2},\d{3})\s+([\s\S]*?)(?=\n{2,}|$)/g;
-  const results = [];
-  let match;
-  while ((match = pattern.exec(data)) !== null) {
-    results.push({
-      start: srtTimeToSeconds(match[2]),
-      end: srtTimeToSeconds(match[3]),
-      text: match[4].replace(/\r\n|\r|\n/g, ' ')
-    });
-  }
-  return results;
-}
+    // Load and parse .srt subtitles
+    fetch('subtitles.srt')
+      .then(response => response.text())
+      .then(parseSRT)
+      .then(subtitles => {
+        let currentIndex = 0;
 
-function srtTimeToSeconds(time) {
-  const [h, m, s] = time.split(':');
-  const [secs, ms] = s.split(',');
-  return parseInt(h) * 3600 + parseInt(m) * 60 + parseInt(secs) + parseInt(ms) / 1000;
-}
+        video.addEventListener('timeupdate', () => {
+          const currentTime = video.currentTime;
+          const currentSubtitle = subtitles[currentIndex];
 
-function highlightWords(text) {
-  for (const word in tooltipDictionary) {
-    const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`\\b(${escapedWord})\\b`, 'gi');
-    text = text.replace(regex, (match) => {
-      const tooltip = tooltipDictionary[match.toLowerCase()];
-      return `<span class="highlight" onclick="showTooltip(this, event)">
-                ${match}
-                <span class="tooltip">${tooltip}</span>
-              </span>`;
-    });
-  }
-  return text;
-}
+          if (currentSubtitle && currentTime >= currentSubtitle.start && currentTime <= currentSubtitle.end) {
+            subtitleDiv.innerHTML = highlightWords(currentSubtitle.text, tooltipDict);
+          } else if (currentSubtitle && currentTime > currentSubtitle.end) {
+            currentIndex++;
+            subtitleDiv.innerHTML = "";
+          } else if (!currentSubtitle || currentTime < currentSubtitle.start) {
+            subtitleDiv.innerHTML = "";
+          }
+        });
+      });
 
-function showTooltip(el, event) {
-  event.stopPropagation();
-  video.pause();
-  el.classList.add('clicked');
-}
+    function parseSRT(data) {
+      const subtitles = [];
+      const blocks = data.trim().split(/\n\s*\n/);
 
-function updateSubtitle() {
-  const currentTime = video.currentTime;
-  const currentSubtitle = subtitles.find(s => currentTime >= s.start && currentTime <= s.end);
-  subtitleBox.innerHTML = currentSubtitle ? highlightWords(currentSubtitle.text) : '';
-}
+      blocks.forEach(block => {
+        const lines = block.split('\n');
+        if (lines.length >= 3) {
+          const timeMatch = lines[1].match(/(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})/);
+          if (timeMatch) {
+            const start = timeToSeconds(timeMatch[1]);
+            const end = timeToSeconds(timeMatch[2]);
+            const text = lines.slice(2).join(' ');
+            subtitles.push({ start, end, text });
+          }
+        }
+      });
 
-// Remove "clicked" class when clicking elsewhere
-document.body.addEventListener('click', () => {
-  document.querySelectorAll('.highlight.clicked').forEach(el => el.classList.remove('clicked'));
-});
+      return subtitles;
+    }
 
-video.addEventListener('timeupdate', updateSubtitle);
+    function timeToSeconds(timeStr) {
+      const [h, m, s] = timeStr.replace(',', '.').split(':');
+      return parseFloat(h) * 3600 + parseFloat(m) * 60 + parseFloat(s);
+    }
 
-// Initialize
-fetchSRT(srtUrl)
-  .then(data => {
-    subtitles = parseSRT(data);
-  });
-</script>
+    function highlightWords(text, dict) {
+      const regex = new RegExp('\\b(' + Object.keys(dict).join('|') + ')\\b', 'gi');
+      return text.replace(regex, match => {
+        const tooltip = dict[match.toLowerCase()];
+        return `<span class="highlight" onclick="pauseVideo(event)">
+                  ${match}
+                  <span class="tooltip">${tooltip}</span>
+                </span>`;
+      });
+    }
+
+    function pauseVideo(event) {
+      event.stopPropagation(); // Prevent other click handlers
+      video.pause();
+      const tooltip = event.currentTarget.querySelector('.tooltip');
+      if (tooltip) tooltip.style.display = 'block';
+    }
+  </script>
 
 </body>
 </html>
