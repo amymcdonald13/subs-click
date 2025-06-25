@@ -3,68 +3,74 @@
 <head>
   <meta charset="UTF-8">
   <title>Interactive Subtitles with Tooltips</title>
-  <style>
-    body {
-      background: #111;
-      color: #fff;
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-    }
+<style>
+  body {
+    background: #111;
+    color: #fff;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+  }
 
-    .video-container {
-      position: relative;
-      width: 80%;
-      margin: 50px auto;
-    }
+  .video-container {
+    position: relative;
+    width: 80%;
+    margin: 50px auto;
+  }
 
-    video {
-      width: 100%;
-      height: auto;
-      display: block;
-    }
+  video {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
 
-    .subtitles {
-      position: absolute;
-      bottom: 10%;
-      left: 5%;
-      right: 5%;
-      text-align: center;
-      font-size: 1.5em;
-      background: rgba(0, 0, 0, 0.6);
-      padding: 10px;
-      border-radius: 8px;
-      min-height: 2em;
-    }
+  .subtitles {
+    position: absolute;
+    bottom: 10%;
+    left: 5%;
+    right: 5%;
+    text-align: center;
+    font-size: 1.5em;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 10px;
+    border-radius: 8px;
+    min-height: 2em;
+  }
 
-    .tooltip {
-      position: relative;
-      cursor: pointer;
-      color: #ffeb3b;
-    }
+  .tooltip {
+    position: relative;
+    cursor: pointer;
+    color: #ffeb3b;
+  }
 
-    .tooltip::after {
-      content: attr(data-tooltip);
-      position: absolute;
-      bottom: 150%;
-      left: 50%;
-      transform: translateX(-50%);
-      background-color: #333;
-      color: #fff;
-      padding: 6px 10px;
-      border-radius: 5px;
-      white-space: nowrap;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.2s ease-in-out;
-      z-index: 10;
-    }
+  .tooltip::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 150%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #333;
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 5px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease-in-out;
+    z-index: 10;
+  }
 
-    .tooltip:hover::after {
-      opacity: 1;
-      visibility: visible;
-    }
-  </style>
+  .tooltip:hover::after {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* ✅ New rule for showing tooltip on click */
+  .tooltip.force-show::after {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+</style>
 </head>
 <body>
 
