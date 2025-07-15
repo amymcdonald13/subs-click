@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Interactive Subtitles Overlay</title>
+  <title>Interactive Subtitles Overlay with Click Tooltip</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -35,7 +35,7 @@
       text-align: center;
       background-color: rgba(0, 0, 0, 0.6);
       color: white;
-      pointer-events: none; /* so clicks pass through except on highlights */
+      pointer-events: none; /* clicks pass through except on highlights */
       user-select: none;
       box-sizing: border-box;
     }
@@ -44,7 +44,7 @@
       color: yellow;
       cursor: pointer;
       position: relative;
-      pointer-events: auto; /* enable interaction only on highlights */
+      pointer-events: auto; /* enable clicks */
       user-select: text;
     }
 
@@ -67,9 +67,18 @@
       user-select: none;
     }
 
+    /* Tooltip visible on hover */
     #subtitle .highlight:hover .tooltip {
       visibility: visible;
       opacity: 1;
+    }
+
+    /* Tooltip visible on click */
+    #subtitle .highlight.clicked .tooltip {
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
+      user-select: text;
     }
   </style>
 </head>
@@ -92,9 +101,9 @@
 
   const tooltipDictionary = {
     "21": "his age.",
-    "my name": "he is stating what he is called.",
+    "hello": "A way to greet someone.",
     "queen": "The former british monarch.",
-    "hello": "a greeting.",
+    "my name": "introducing himself.",
     "dance": "A type of movement."
   };
 
@@ -156,23 +165,43 @@
     sortedPhrases.forEach(phrase => {
       const regex = new RegExp(`\\b${escapeRegExp(phrase)}\\b`, 'gi');
       processed = processed.replace(regex, match => {
-        return `<span class="highlight" onclick="pauseAndShowTooltip(event)">
-                  ${match}
-                  <span class="tooltip">${tooltipDictionary[phrase]}</span>
-                </span>`;
+        return `<span class="highlight" tabindex="0">${match}<span class="tooltip">${tooltipDictionary[phrase]}</span></span>`;
       });
     });
 
     return processed;
   }
 
-  function pauseAndShowTooltip(event) {
-    event.stopPropagation();
-    video.pause();
-    const tooltip = event.currentTarget.querySelector(".tooltip");
-    tooltip.style.visibility = "visible";
-    tooltip.style.opacity = 1;
-  }
+  // Handle clicks on subtitle highlights
+  subtitleBox.addEventListener("click", event => {
+    const highlight = event.target.closest(".highlight");
+    if (!highlight) return;
+
+    // Remove 'clicked' from all highlights
+    subtitleBox.querySelectorAll(".highlight.clicked").forEach(el => {
+      if (el !== highlight) el.classList.remove("clicked");
+    });
+
+    // Toggle clicked class on clicked highlight
+    const wasClicked = highlight.classList.contains("clicked");
+    if (wasClicked) {
+      highlight.classList.remove("clicked");
+      video.play();
+    } else {
+      highlight.classList.add("clicked");
+      video.pause();
+    }
+  });
+
+  // Hide tooltips when clicking outside subtitles
+  document.addEventListener("click", event => {
+    if (!subtitleBox.contains(event.target)) {
+      subtitleBox.querySelectorAll(".highlight.clicked").forEach(el => {
+        el.classList.remove("clicked");
+      });
+      video.play();
+    }
+  });
 
   video.addEventListener("timeupdate", () => {
     renderSubtitle(video.currentTime);
