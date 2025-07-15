@@ -2,23 +2,33 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Interactive Subtitles</title>
+  <title>Interactive Subtitles with Sidebar</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       background: #111;
       color: #fff;
-      text-align: center;
+      margin: 0;
+      display: flex;
+      height: 100vh;
+    }
+
+    #main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
     }
 
     video {
       width: 80%;
-      margin-top: 20px;
     }
 
     #subtitle-container {
       margin-top: 20px;
       font-size: 1.2em;
+      text-align: center;
     }
 
     .highlight {
@@ -29,48 +39,77 @@
 
     .tooltip {
       visibility: hidden;
-      background-color: rgba(0,0,0,0.8);
+      background-color: rgba(0, 0, 0, 0.8);
       color: #fff;
-      text-align: center;
       padding: 6px;
       border-radius: 6px;
       position: absolute;
-      z-index: 1;
-      bottom: 125%; /* Above the word */
+      bottom: 125%;
       left: 50%;
       transform: translateX(-50%);
       width: max-content;
       max-width: 200px;
       white-space: pre-wrap;
+      z-index: 1;
     }
 
-    .highlight:hover .tooltip,
-    .highlight.clicked .tooltip {
+    .highlight:hover .tooltip {
       visibility: visible;
+    }
+
+    #sidebar {
+      width: 300px;
+      background: #222;
+      border-left: 1px solid #444;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    #definition-box h3 {
+      margin-top: 0;
+      font-size: 1.3em;
+    }
+
+    #definition-box p {
+      font-size: 1em;
+    }
+
+    .hidden {
+      display: none;
     }
   </style>
 </head>
 <body>
 
-  <video id="video" controls>
-    <source src="video.mp4" type="video/mp4">
-    Your browser does not support the video tag.
-  </video>
+  <div id="main-content">
+    <video id="video" controls>
+      <source src="video.mp4" type="video/mp4">
+      Your browser does not support the video tag.
+    </video>
 
-  <div id="subtitle-container"></div>
+    <div id="subtitle-container"></div>
+  </div>
+
+  <div id="sidebar">
+    <div id="definition-box" class="hidden">
+      <h3 id="term-title"></h3>
+      <p id="term-definition"></p>
+    </div>
+  </div>
 
   <script>
     const video = document.getElementById('video');
     const subtitleContainer = document.getElementById('subtitle-container');
+    const definitionBox = document.getElementById('definition-box');
+    const termTitle = document.getElementById('term-title');
+    const termDefinition = document.getElementById('term-definition');
 
-    // Define tooltip dictionary
     const tooltipDictionary = {
       "21": "his age.",
-      "queen": "the british monarch.",
-      "hello": "a greeting."
+      "queen": "the former british monarch.",
+      "hello": "A way to greet someone."
     };
 
-    // Fetch and parse SRT file
     fetch('subtitles.srt')
       .then(response => response.text())
       .then(parseSRT)
@@ -88,12 +127,11 @@
             subtitleContainer.innerHTML = newIndex !== -1
               ? highlightWords(subtitles[newIndex].text)
               : '';
-            attachTooltipEvents();
+            attachTooltipAndClickEvents();
           }
         });
       });
 
-    // Parse SRT file
     function parseSRT(data) {
       const subtitles = [];
       const entries = data.split('\n\n');
@@ -113,27 +151,31 @@
       return subtitles;
     }
 
-    // Highlight words in tooltip dictionary
     function highlightWords(text) {
       const words = text.split(/\s+/);
       return words.map(word => {
         const cleanWord = word.replace(/[.,?!]/g, '').toLowerCase();
         if (tooltipDictionary[cleanWord]) {
-          return `<span class="highlight">${word}<span class="tooltip">${tooltipDictionary[cleanWord]}</span></span>`;
+          return `<span class="highlight" data-term="${cleanWord}">${word}<span class="tooltip">${tooltipDictionary[cleanWord]}</span></span>`;
         }
         return word;
       }).join(' ');
     }
 
-    // Attach tooltip click events
-    function attachTooltipEvents() {
+    function attachTooltipAndClickEvents() {
       document.querySelectorAll('.highlight').forEach(span => {
-        span.addEventListener('click', e => {
+        const term = span.dataset.term;
+        span.addEventListener('click', () => {
           video.pause();
-          document.querySelectorAll('.highlight').forEach(s => s.classList.remove('clicked'));
-          span.classList.add('clicked');
+          showDefinition(term, tooltipDictionary[term]);
         });
       });
+    }
+
+    function showDefinition(term, definition) {
+      termTitle.textContent = term.charAt(0).toUpperCase() + term.slice(1);
+      termDefinition.textContent = definition;
+      definitionBox.classList.remove('hidden');
     }
   </script>
 </body>
