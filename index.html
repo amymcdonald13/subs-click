@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Dynamic Subtitles with Sidebar Definitions</title>
+  <title>Dynamic Subtitles with Sidebar</title>
   <style>
     body {
       margin: 0;
       font-family: sans-serif;
       background: #111;
-      color: white;
+      color: #fff;
       display: flex;
       height: 100vh;
     }
@@ -18,7 +18,6 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: start;
       padding: 20px;
     }
 
@@ -29,7 +28,7 @@
 
     #subtitle-container {
       margin-top: 20px;
-      font-size: 1.2rem;
+      font-size: 1.3rem;
       text-align: center;
       min-height: 2em;
     }
@@ -42,16 +41,16 @@
 
     .tooltip {
       visibility: hidden;
-      background-color: rgba(0, 0, 0, 0.85);
+      background-color: rgba(0, 0, 0, 0.8);
       color: #fff;
       padding: 5px 10px;
-      border-radius: 6px;
+      border-radius: 5px;
       position: absolute;
-      bottom: 125%;
+      bottom: 130%;
       left: 50%;
       transform: translateX(-50%);
       white-space: pre-wrap;
-      z-index: 2;
+      z-index: 10;
     }
 
     .highlight:hover .tooltip {
@@ -73,7 +72,7 @@
 
     #definition-box p {
       font-size: 1rem;
-      line-height: 1.4;
+      line-height: 1.5;
     }
 
     .hidden {
@@ -84,8 +83,8 @@
 <body>
   <div id="main-content">
     <video id="video" controls>
-      <source src="video.mp4" type="video/mp4" />
-      Your browser does not support HTML5 video.
+      <source src="video.mp4" type="video/mp4">
+      Your browser does not support the video tag.
     </video>
     <div id="subtitle-container"></div>
   </div>
@@ -100,69 +99,70 @@
   <script>
     const video = document.getElementById('video');
     const subtitleContainer = document.getElementById('subtitle-container');
-    const definitionBox = document.getElementById('definition-box');
     const termTitle = document.getElementById('term-title');
     const termDefinition = document.getElementById('term-definition');
+    const definitionBox = document.getElementById('definition-box');
 
     const tooltipDictionary = {
-      "21": "His age.",
-      "queen": "the former british monarch.",
-      "hello": "a way to greet someone."
+      21: "his age.",
+      queen: "the former british monarch.",
+      hello: "A way to greet someone in English."
     };
 
     let subtitles = [];
-    let currentSubtitleIndex = -1;
+    let currentIndex = -1;
 
     fetch('subtitles.srt')
       .then(res => res.text())
       .then(parseSRT)
-      .then(data => {
-        subtitles = data;
-        video.addEventListener('timeupdate', updateSubtitle);
+      .then(subs => {
+        subtitles = subs;
+        video.addEventListener('timeupdate', handleSubtitleDisplay);
       });
 
     function parseSRT(data) {
-      const blocks = data.split('\n\n');
-      const result = [];
+      const entries = data.trim().split(/\n{2,}/);
+      const subs = [];
 
-      for (let block of blocks) {
-        const lines = block.split('\n').filter(Boolean);
+      for (const entry of entries) {
+        const lines = entry.split('\n');
         if (lines.length >= 3) {
-          const timeMatch = lines[1].match(/(\d+):(\d+):(\d+),(\d+)\s-->\s(\d+):(\d+):(\d+),(\d+)/);
-          if (!timeMatch) continue;
-
-          const start =
-            parseInt(timeMatch[1]) * 3600 +
-            parseInt(timeMatch[2]) * 60 +
-            parseInt(timeMatch[3]) +
-            parseInt(timeMatch[4]) / 1000;
-          const end =
-            parseInt(timeMatch[5]) * 3600 +
-            parseInt(timeMatch[6]) * 60 +
-            parseInt(timeMatch[7]) +
-            parseInt(timeMatch[8]) / 1000;
-
+          const timeLine = lines[1];
+          const [startTime, endTime] = timeLine.split(' --> ').map(parseTime);
           const text = lines.slice(2).join(' ');
-          result.push({ start, end, text });
+          subs.push({ start: startTime, end: endTime, text });
         }
       }
-      return result;
+
+      return subs;
     }
 
-    function updateSubtitle() {
-      const time = video.currentTime;
-      const nextIndex = subtitles.findIndex((sub, i) => time >= sub.start && time <= sub.end);
+    function parseTime(timeString) {
+      const [h, m, s] = timeString.split(/[:,]/);
+      return parseInt(h) * 3600 + parseInt(m) * 60 + parseInt(s) + parseInt(timeString.split(',')[1]) / 1000;
+    }
 
-      if (nextIndex !== currentSubtitleIndex) {
-        currentSubtitleIndex = nextIndex;
-        subtitleContainer.innerHTML = nextIndex === -1
-          ? ''
-          : renderSubtitle(subtitles[nextIndex].text);
-        addClickListeners();
+    function handleSubtitleDisplay() {
+      const currentTime = video.currentTime;
+
+      const newIndex = subtitles.findIndex(
+        (sub, i) =>
+          currentTime >= sub.start && currentTime <= sub.end
+      );
+
+      if (newIndex !== currentIndex) {
+        currentIndex = newIndex;
+
+        if (newIndex === -1) {
+          subtitleContainer.innerHTML = '';
+        } else {
+          subtitleContainer.innerHTML = highlightKeywords(subtitles[newIndex].text);
+          setupInteractions();
+        }
       }
     }
 
-    function renderSubtitle(text) {
+    function highlightKeywords(text) {
       const words = text.split(/\s+/);
       return words.map(word => {
         const clean = word.replace(/[.,?!]/g, '').toLowerCase();
@@ -173,7 +173,7 @@
       }).join(' ');
     }
 
-    function addClickListeners() {
+    function setupInteractions() {
       document.querySelectorAll('.highlight').forEach(span => {
         const term = span.dataset.term;
         span.addEventListener('click', () => {
@@ -184,13 +184,9 @@
     }
 
     function showDefinition(term, definition) {
-      termTitle.textContent = capitalize(term);
+      termTitle.textContent = term.charAt(0).toUpperCase() + term.slice(1);
       termDefinition.textContent = definition;
       definitionBox.classList.remove('hidden');
-    }
-
-    function capitalize(str) {
-      return str.charAt(0).toUpperCase() + str.slice(1);
     }
   </script>
 </body>
