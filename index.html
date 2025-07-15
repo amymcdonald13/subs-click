@@ -2,35 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Dynamic Subtitles with Sidebar</title>
+  <title>Interactive Subtitles with Phrases and Fetch</title>
   <style>
     body {
-      margin: 0;
-      font-family: sans-serif;
+      font-family: Arial, sans-serif;
       background: #111;
       color: #fff;
-      display: flex;
-      height: 100vh;
-    }
-
-    #main-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
       padding: 20px;
     }
 
     video {
-      width: 80%;
+      width: 100%;
       max-width: 800px;
+      display: block;
+      margin-bottom: 10px;
     }
 
-    #subtitle-container {
-      margin-top: 20px;
-      font-size: 1.3rem;
-      text-align: center;
-      min-height: 2em;
+    #subtitle {
+      max-width: 800px;
+      margin-top: 10px;
+      font-size: 1.2rem;
+      line-height: 1.5;
     }
 
     .highlight {
@@ -41,153 +33,134 @@
 
     .tooltip {
       visibility: hidden;
-      background-color: rgba(0, 0, 0, 0.8);
+      background-color: #333;
       color: #fff;
-      padding: 5px 10px;
-      border-radius: 5px;
+      text-align: left;
+      border-radius: 6px;
+      padding: 5px;
       position: absolute;
-      bottom: 130%;
-      left: 50%;
-      transform: translateX(-50%);
-      white-space: pre-wrap;
-      z-index: 10;
+      z-index: 1;
+      bottom: 125%;
+      left: 0;
+      opacity: 0;
+      transition: opacity 0.3s;
+      white-space: nowrap;
     }
 
     .highlight:hover .tooltip {
       visibility: visible;
-    }
-
-    #sidebar {
-      width: 300px;
-      background: #222;
-      padding: 20px;
-      border-left: 1px solid #444;
-      overflow-y: auto;
-    }
-
-    #definition-box h3 {
-      margin-top: 0;
-      font-size: 1.3rem;
-    }
-
-    #definition-box p {
-      font-size: 1rem;
-      line-height: 1.5;
-    }
-
-    .hidden {
-      display: none;
+      opacity: 1;
     }
   </style>
 </head>
 <body>
-  <div id="main-content">
-    <video id="video" controls>
-      <source src="video.mp4" type="video/mp4">
-      Your browser does not support the video tag.
-    </video>
-    <div id="subtitle-container"></div>
-  </div>
 
-  <div id="sidebar">
-    <div id="definition-box" class="hidden">
-      <h3 id="term-title"></h3>
-      <p id="term-definition"></p>
-    </div>
-  </div>
+<video id="video" controls>
+  <source src="video.mp4" type="video/mp4" />
+  Your browser does not support the video tag.
+</video>
 
-  <script>
-    const video = document.getElementById('video');
-    const subtitleContainer = document.getElementById('subtitle-container');
-    const termTitle = document.getElementById('term-title');
-    const termDefinition = document.getElementById('term-definition');
-    const definitionBox = document.getElementById('definition-box');
+<div id="subtitle"></div>
 
-    const tooltipDictionary = {
-      21: "his age.",
-      queen: "the former british monarch.",
-      hello: "A way to greet someone in English."
-    };
+<script>
+  const video = document.getElementById("video");
+  const subtitleBox = document.getElementById("subtitle");
 
-    let subtitles = [];
-    let currentIndex = -1;
+  // URL to your .srt file (must be accessible via CORS if hosted remotely)
+  const srtUrl = "subtitles.srt";
 
-    fetch('subtitles.srt')
-      .then(res => res.text())
-      .then(parseSRT)
-      .then(subs => {
-        subtitles = subs;
-        video.addEventListener('timeupdate', handleSubtitleDisplay);
+  const tooltipDictionary = {
+    "21": "his age",
+    "my name": "stating what his name is.",
+    "hello": "way to greet someone.",
+    "queen": "former british monarch.",
+    "dance": "A type of movement."
+  };
+
+  let subtitles = [];
+
+  async function fetchSRT(url) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Failed to fetch subtitles");
+      const text = await response.text();
+      subtitles = parseSRT(text);
+    } catch (err) {
+      console.error("Error loading SRT file:", err);
+    }
+  }
+
+  function parseSRT(data) {
+    const srt = data.trim().split(/\r?\n\r?\n/);
+    return srt.map(block => {
+      const lines = block.split(/\r?\n/);
+      const time = lines[1];
+      const [start, end] = time.split(" --> ").map(t => toSeconds(t.trim()));
+      const text = lines.slice(2).join(" ");
+      return { start, end, text };
+    });
+  }
+
+  function toSeconds(timeStr) {
+    const [h, m, s] = timeStr.split(":");
+    const [secs, ms] = s.split(",");
+    return (
+      parseInt(h) * 3600 +
+      parseInt(m) * 60 +
+      parseInt(secs) +
+      parseInt(ms) / 1000
+    );
+  }
+
+  function renderSubtitle(currentTime) {
+    const current = subtitles.find(
+      sub => currentTime >= sub.start && currentTime <= sub.end
+    );
+    if (current) {
+      subtitleBox.innerHTML = processSubtitle(current.text);
+    } else {
+      subtitleBox.innerHTML = "";
+    }
+  }
+
+  function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function processSubtitle(text) {
+    let processed = text;
+
+    // Sort phrases by length descending to prioritize longer matches
+    const sortedPhrases = Object.keys(tooltipDictionary).sort((a, b) => b.length - a.length);
+
+    sortedPhrases.forEach(phrase => {
+      const regex = new RegExp(`\\b${escapeRegExp(phrase)}\\b`, 'gi');
+      processed = processed.replace(regex, match => {
+        return `<span class="highlight" onclick="pauseAndShowTooltip(event)">
+                  ${match}
+                  <span class="tooltip">${tooltipDictionary[phrase]}</span>
+                </span>`;
       });
+    });
 
-    function parseSRT(data) {
-      const entries = data.trim().split(/\n{2,}/);
-      const subs = [];
+    return processed;
+  }
 
-      for (const entry of entries) {
-        const lines = entry.split('\n');
-        if (lines.length >= 3) {
-          const timeLine = lines[1];
-          const [startTime, endTime] = timeLine.split(' --> ').map(parseTime);
-          const text = lines.slice(2).join(' ');
-          subs.push({ start: startTime, end: endTime, text });
-        }
-      }
+  function pauseAndShowTooltip(event) {
+    event.stopPropagation();
+    video.pause();
+    const tooltip = event.currentTarget.querySelector(".tooltip");
+    tooltip.style.visibility = "visible";
+    tooltip.style.opacity = 1;
+  }
 
-      return subs;
-    }
+  video.addEventListener("timeupdate", () => {
+    renderSubtitle(video.currentTime);
+  });
 
-    function parseTime(timeString) {
-      const [h, m, s] = timeString.split(/[:,]/);
-      return parseInt(h) * 3600 + parseInt(m) * 60 + parseInt(s) + parseInt(timeString.split(',')[1]) / 1000;
-    }
+  // Fetch subtitles at startup
+  fetchSRT(srtUrl);
+</script>
 
-    function handleSubtitleDisplay() {
-      const currentTime = video.currentTime;
-
-      const newIndex = subtitles.findIndex(
-        (sub, i) =>
-          currentTime >= sub.start && currentTime <= sub.end
-      );
-
-      if (newIndex !== currentIndex) {
-        currentIndex = newIndex;
-
-        if (newIndex === -1) {
-          subtitleContainer.innerHTML = '';
-        } else {
-          subtitleContainer.innerHTML = highlightKeywords(subtitles[newIndex].text);
-          setupInteractions();
-        }
-      }
-    }
-
-    function highlightKeywords(text) {
-      const words = text.split(/\s+/);
-      return words.map(word => {
-        const clean = word.replace(/[.,?!]/g, '').toLowerCase();
-        if (tooltipDictionary[clean]) {
-          return `<span class="highlight" data-term="${clean}">${word}<span class="tooltip">${tooltipDictionary[clean]}</span></span>`;
-        }
-        return word;
-      }).join(' ');
-    }
-
-    function setupInteractions() {
-      document.querySelectorAll('.highlight').forEach(span => {
-        const term = span.dataset.term;
-        span.addEventListener('click', () => {
-          video.pause();
-          showDefinition(term, tooltipDictionary[term]);
-        });
-      });
-    }
-
-    function showDefinition(term, definition) {
-      termTitle.textContent = term.charAt(0).toUpperCase() + term.slice(1);
-      termDefinition.textContent = definition;
-      definitionBox.classList.remove('hidden');
-    }
-  </script>
 </body>
 </html>
