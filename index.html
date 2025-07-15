@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Interactive Subtitles Overlay with Click Tooltip</title>
+  <title>Interactive Subtitles Overlay with Video Click and Spacebar Pause</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -22,6 +22,7 @@
     video {
       width: 100%;
       display: block;
+      cursor: pointer;
     }
 
     #subtitle {
@@ -35,7 +36,7 @@
       text-align: center;
       background-color: rgba(0, 0, 0, 0.6);
       color: white;
-      pointer-events: none; /* clicks pass through except on highlights */
+      pointer-events: none;
       user-select: none;
       box-sizing: border-box;
     }
@@ -44,7 +45,7 @@
       color: yellow;
       cursor: pointer;
       position: relative;
-      pointer-events: auto; /* enable clicks */
+      pointer-events: auto;
       user-select: text;
     }
 
@@ -67,18 +68,11 @@
       user-select: none;
     }
 
-    /* Tooltip visible on hover */
-    #subtitle .highlight:hover .tooltip {
-      visibility: visible;
-      opacity: 1;
-    }
-
-    /* Tooltip visible on click */
+    #subtitle .highlight:hover .tooltip,
     #subtitle .highlight.clicked .tooltip {
       visibility: visible;
       opacity: 1;
       pointer-events: auto;
-      user-select: text;
     }
   </style>
 </head>
@@ -100,11 +94,11 @@
   const srtUrl = "subtitles.srt";
 
   const tooltipDictionary = {
-    "21": "his age.",
-    "hello": "A way to greet someone.",
-    "queen": "The former british monarch.",
-    "my name": "introducing himself.",
-    "dance": "A type of movement."
+    "21": "An Italian astronomer and physicist.",
+    "hello": "A model where the Sun is at the center of the solar system.",
+    "my name": "The force of attraction between masses.",
+    "dance": "The speed at which light travels in a vacuum, approximately 299,792 km/s.",
+    "queen": "A force that attracts objects toward the center of the Earth."
   };
 
   let subtitles = [];
@@ -159,7 +153,6 @@
 
   function processSubtitle(text) {
     let processed = text;
-
     const sortedPhrases = Object.keys(tooltipDictionary).sort((a, b) => b.length - a.length);
 
     sortedPhrases.forEach(phrase => {
@@ -172,17 +165,14 @@
     return processed;
   }
 
-  // Handle clicks on subtitle highlights
   subtitleBox.addEventListener("click", event => {
     const highlight = event.target.closest(".highlight");
     if (!highlight) return;
 
-    // Remove 'clicked' from all highlights
     subtitleBox.querySelectorAll(".highlight.clicked").forEach(el => {
       if (el !== highlight) el.classList.remove("clicked");
     });
 
-    // Toggle clicked class on clicked highlight
     const wasClicked = highlight.classList.contains("clicked");
     if (wasClicked) {
       highlight.classList.remove("clicked");
@@ -193,18 +183,33 @@
     }
   });
 
-  // Hide tooltips when clicking outside subtitles
   document.addEventListener("click", event => {
     if (!subtitleBox.contains(event.target)) {
       subtitleBox.querySelectorAll(".highlight.clicked").forEach(el => {
         el.classList.remove("clicked");
       });
-      video.play();
     }
   });
 
   video.addEventListener("timeupdate", () => {
     renderSubtitle(video.currentTime);
+  });
+
+  // Pause/play by clicking video
+  video.addEventListener("click", () => {
+    if (video.paused) video.play();
+    else video.pause();
+  });
+
+  // Pause/play with spacebar
+  document.addEventListener("keydown", e => {
+    if (e.code === "Space" || e.keyCode === 32) {
+      e.preventDefault();
+      if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        if (video.paused) video.play();
+        else video.pause();
+      }
+    }
   });
 
   fetchSRT(srtUrl);
