@@ -2,33 +2,50 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Interactive Subtitles with Phrases and Fetch</title>
+  <title>Interactive Subtitles Overlay</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       background: #111;
       color: #fff;
       padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .video-container {
+      position: relative;
+      width: 800px;
+      max-width: 100%;
     }
 
     video {
       width: 100%;
-      max-width: 800px;
       display: block;
-      margin-bottom: 10px;
     }
 
     #subtitle {
-      max-width: 800px;
-      margin-top: 10px;
-      font-size: 1.2rem;
-      line-height: 1.5;
+      position: absolute;
+      bottom: 40px;
+      left: 0;
+      width: 100%;
+      padding: 10px 20px;
+      font-size: 1.3rem;
+      line-height: 1.4;
+      text-align: center;
+      background-color: rgba(0, 0, 0, 0.6);
+      color: white;
+      pointer-events: none; /* so clicks pass through except on highlights */
+      user-select: none;
+      box-sizing: border-box;
     }
 
-    .highlight {
+    #subtitle .highlight {
       color: yellow;
       cursor: pointer;
       position: relative;
+      pointer-events: auto; /* enable interaction only on highlights */
+      user-select: text;
     }
 
     .tooltip {
@@ -39,15 +56,18 @@
       border-radius: 6px;
       padding: 5px;
       position: absolute;
-      z-index: 1;
+      z-index: 10;
       bottom: 125%;
-      left: 0;
+      left: 50%;
+      transform: translateX(-50%);
       opacity: 0;
       transition: opacity 0.3s;
       white-space: nowrap;
+      pointer-events: none;
+      user-select: none;
     }
 
-    .highlight:hover .tooltip {
+    #subtitle .highlight:hover .tooltip {
       visibility: visible;
       opacity: 1;
     }
@@ -55,25 +75,26 @@
 </head>
 <body>
 
-<video id="video" controls>
-  <source src="video.mp4" type="video/mp4" />
-  Your browser does not support the video tag.
-</video>
+<div class="video-container">
+  <video id="video" controls crossorigin="anonymous">
+    <source src="video.mp4" type="video/mp4" />
+    Your browser does not support the video tag.
+  </video>
 
-<div id="subtitle"></div>
+  <div id="subtitle"></div>
+</div>
 
 <script>
   const video = document.getElementById("video");
   const subtitleBox = document.getElementById("subtitle");
 
-  // URL to your .srt file (must be accessible via CORS if hosted remotely)
   const srtUrl = "subtitles.srt";
 
   const tooltipDictionary = {
-    "21": "his age",
-    "my name": "stating what his name is.",
-    "hello": "way to greet someone.",
-    "queen": "former british monarch.",
+    "21": "his age.",
+    "my name": "he is stating what he is called.",
+    "queen": "The former british monarch.",
+    "hello": "a greeting.",
     "dance": "A type of movement."
   };
 
@@ -130,7 +151,6 @@
   function processSubtitle(text) {
     let processed = text;
 
-    // Sort phrases by length descending to prioritize longer matches
     const sortedPhrases = Object.keys(tooltipDictionary).sort((a, b) => b.length - a.length);
 
     sortedPhrases.forEach(phrase => {
@@ -158,7 +178,6 @@
     renderSubtitle(video.currentTime);
   });
 
-  // Fetch subtitles at startup
   fetchSRT(srtUrl);
 </script>
 
