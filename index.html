@@ -9,22 +9,16 @@
       background: #111;
       color: #fff;
       text-align: center;
-      padding: 20px;
     }
 
     video {
       width: 80%;
-      max-width: 800px;
-      margin-bottom: 20px;
+      margin-top: 20px;
     }
 
-    #subtitle-box {
+    #subtitle-container {
+      margin-top: 20px;
       font-size: 1.2em;
-      background: rgba(0, 0, 0, 0.6);
-      display: inline-block;
-      padding: 10px 20px;
-      border-radius: 10px;
-      margin-top: 10px;
     }
 
     .highlight {
@@ -35,117 +29,112 @@
 
     .tooltip {
       visibility: hidden;
-      background-color: #333;
+      background-color: rgba(0,0,0,0.8);
       color: #fff;
       text-align: center;
+      padding: 6px;
       border-radius: 6px;
-      padding: 5px;
       position: absolute;
       z-index: 1;
-      bottom: 125%; /* Position above text */
+      bottom: 125%; /* Above the word */
       left: 50%;
       transform: translateX(-50%);
-      opacity: 0;
-      transition: opacity 0.3s;
-      white-space: nowrap;
+      width: max-content;
+      max-width: 200px;
+      white-space: pre-wrap;
     }
 
     .highlight:hover .tooltip,
-    .highlight.active .tooltip {
+    .highlight.clicked .tooltip {
       visibility: visible;
-      opacity: 1;
     }
   </style>
 </head>
 <body>
 
-  <h2>Interactive Subtitled Video</h2>
   <video id="video" controls>
     <source src="video.mp4" type="video/mp4">
     Your browser does not support the video tag.
   </video>
 
-  <div id="subtitle-box"></div>
+  <div id="subtitle-container"></div>
 
   <script>
     const video = document.getElementById('video');
-    const subtitleBox = document.getElementById('subtitle-box');
+    const subtitleContainer = document.getElementById('subtitle-container');
 
-    // Tooltip dictionary
-    const tooltipDict = {
-      "21": "his age",
-      "queen": "monarch",
-      "name": "way to greet someone",
-      "hello": "a greeting"
+    // Define tooltip dictionary
+    const tooltipDictionary = {
+      "quantum": "A discrete quantity of energy proportional in magnitude to the frequency.",
+      "entanglement": "A physical phenomenon that occurs when pairs of particles become correlated.",
+      "wavefunction": "A mathematical function describing the quantum state of a system."
     };
 
-    // Store parsed subtitles
-    let subtitles = [];
-
-    // Load and parse .srt subtitle file
+    // Fetch and parse SRT file
     fetch('subtitles.srt')
-      .then(res => res.text())
+      .then(response => response.text())
       .then(parseSRT)
-      .catch(err => console.error("Failed to load subtitles:", err));
+      .then(subtitles => {
+        let currentIndex = -1;
 
-    function parseSRT(data) {
-      const blocks = data.trim().split(/\n\n+/);
-      subtitles = blocks.map(block => {
-        const lines = block.split('\n');
-        const [start, end] = lines[1].split(' --> ').map(timeToSeconds);
-        const text = lines.slice(2).join(' ');
-        return { start, end, text };
+        video.addEventListener('timeupdate', () => {
+          const currentTime = video.currentTime;
+          let newIndex = subtitles.findIndex((sub, i) =>
+            currentTime >= sub.start && currentTime <= sub.end
+          );
+
+          if (newIndex !== currentIndex) {
+            currentIndex = newIndex;
+            subtitleContainer.innerHTML = newIndex !== -1
+              ? highlightWords(subtitles[newIndex].text)
+              : '';
+            attachTooltipEvents();
+          }
+        });
       });
-    }
 
-    function timeToSeconds(time) {
-      const [h, m, s] = time.split(/[:,]/);
-      return (+h) * 3600 + (+m) * 60 + (+s) + (+time.split(',')[1] || 0) / 1000;
-    }
+    // Parse SRT file
+    function parseSRT(data) {
+      const subtitles = [];
+      const entries = data.split('\n\n');
+      const timeReg = /(\d{2}):(\d{2}):(\d{2}),(\d{3})/g;
 
-    // Update subtitles in sync with video
-    video.addEventListener('timeupdate', () => {
-      const current = video.currentTime;
-      const subtitle = subtitles.find(s => current >= s.start && current <= s.end);
-      if (subtitle) {
-        subtitleBox.innerHTML = formatSubtitle(subtitle.text);
-      } else {
-        subtitleBox.innerHTML = '';
+      for (let entry of entries) {
+        const lines = entry.split('\n').filter(Boolean);
+        if (lines.length >= 2) {
+          const [_, startH, startM, startS, startMs, endH, endM, endS, endMs] = [...lines[1].matchAll(timeReg)][0].concat([...lines[1].matchAll(timeReg)][1] || []);
+          const start = (+startH) * 3600 + (+startM) * 60 + (+startS) + (+startMs) / 1000;
+          const end = (+endH) * 3600 + (+endM) * 60 + (+endS) + (+endMs) / 1000;
+          const text = lines.slice(2).join(' ');
+          subtitles.push({ start, end, text });
+        }
       }
-    });
 
-    function formatSubtitle(text) {
+      return subtitles;
+    }
+
+    // Highlight words in tooltip dictionary
+    function highlightWords(text) {
       const words = text.split(/\s+/);
       return words.map(word => {
         const cleanWord = word.replace(/[.,?!]/g, '').toLowerCase();
-        if (tooltipDict[cleanWord]) {
-          return `<span class="highlight" onclick="pauseAndShowTooltip(event)">
-            ${word}<span class="tooltip">${tooltipDict[cleanWord]}</span>
-          </span>`;
-        } else {
-          return word;
+        if (tooltipDictionary[cleanWord]) {
+          return `<span class="highlight">${word}<span class="tooltip">${tooltipDictionary[cleanWord]}</span></span>`;
         }
+        return word;
       }).join(' ');
     }
 
-    window.pauseAndShowTooltip = function (event) {
-      video.pause();
-
-      // Reset all previous highlights
-      document.querySelectorAll('.highlight').forEach(el => el.classList.remove('active'));
-
-      // Show tooltip on clicked word
-      const el = event.currentTarget;
-      el.classList.add('active');
-
-      // Prevent bubbling
-      event.stopPropagation();
-    };
-
-    // Hide tooltips when clicking outside
-    document.addEventListener('click', () => {
-      document.querySelectorAll('.highlight').forEach(el => el.classList.remove('active'));
-    });
+    // Attach tooltip click events
+    function attachTooltipEvents() {
+      document.querySelectorAll('.highlight').forEach(span => {
+        span.addEventListener('click', e => {
+          video.pause();
+          document.querySelectorAll('.highlight').forEach(s => s.classList.remove('clicked'));
+          span.classList.add('clicked');
+        });
+      });
+    }
   </script>
 </body>
 </html>
