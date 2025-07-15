@@ -1,142 +1,151 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
   <title>Interactive Subtitles</title>
   <style>
     body {
-      font-family: sans-serif;
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #fff;
+      text-align: center;
       padding: 20px;
-      background: #f4f4f4;
     }
+
     video {
-      width: 100%;
+      width: 80%;
       max-width: 800px;
-      display: block;
       margin-bottom: 20px;
     }
-    #subtitles {
-      font-size: 1.2rem;
-      background: #222;
-      color: white;
-      padding: 10px;
-      max-width: 800px;
-      line-height: 1.5;
-      position: relative;
+
+    #subtitle-box {
+      font-size: 1.2em;
+      background: rgba(0, 0, 0, 0.6);
+      display: inline-block;
+      padding: 10px 20px;
+      border-radius: 10px;
+      margin-top: 10px;
     }
+
     .highlight {
-      color: #ffd700;
+      color: yellow;
       cursor: pointer;
       position: relative;
     }
+
     .tooltip {
+      visibility: hidden;
+      background-color: #333;
+      color: #fff;
+      text-align: center;
+      border-radius: 6px;
+      padding: 5px;
       position: absolute;
-      background: rgba(0, 0, 0, 0.9);
-      color: white;
-      padding: 5px 10px;
-      border-radius: 5px;
-      top: -2.5em;
-      left: 0;
+      z-index: 1;
+      bottom: 125%; /* Position above text */
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      transition: opacity 0.3s;
       white-space: nowrap;
-      display: none;
-      z-index: 10;
     }
-    .highlight:hover .tooltip {
-      display: block;
+
+    .highlight:hover .tooltip,
+    .highlight.active .tooltip {
+      visibility: visible;
+      opacity: 1;
     }
   </style>
 </head>
 <body>
 
+  <h2>Interactive Subtitled Video</h2>
   <video id="video" controls>
-    <source src="video.mp4" type="video/mp4" />
-    Your browser does not support HTML5 video.
+    <source src="video.mp4" type="video/mp4">
+    Your browser does not support the video tag.
   </video>
 
-  <div id="subtitles">Loading subtitles...</div>
+  <div id="subtitle-box"></div>
 
   <script>
     const video = document.getElementById('video');
-    const subtitleDiv = document.getElementById('subtitles');
+    const subtitleBox = document.getElementById('subtitle-box');
 
     // Tooltip dictionary
-    const tooltipDictionary = {
-      "21": "his age.",
-      "dance": "a type of movement."
+    const tooltipDict = {
+      "21": "his age",
+      "queen": "monarch",
+      "name": "way to greet someone",
+      "hello": "a greeting"
     };
 
+    // Store parsed subtitles
     let subtitles = [];
 
-    // Fetch and parse the .srt file
+    // Load and parse .srt subtitle file
     fetch('subtitles.srt')
-      .then(response => response.text())
-      .then(data => {
-        subtitles = parseSRT(data);
-      });
+      .then(res => res.text())
+      .then(parseSRT)
+      .catch(err => console.error("Failed to load subtitles:", err));
 
-    // Parse .srt file into usable array
     function parseSRT(data) {
-      const entries = [];
       const blocks = data.trim().split(/\n\n+/);
-
-      for (let block of blocks) {
+      subtitles = blocks.map(block => {
         const lines = block.split('\n');
-        if (lines.length >= 3) {
-          const timeMatch = lines[1].match(/(\d{2}):(\d{2}):(\d{2}),(\d{3}) --> (\d{2}):(\d{2}):(\d{2}),(\d{3})/);
-          if (!timeMatch) continue;
-
-          const start = toSeconds(timeMatch.slice(1, 5));
-          const end = toSeconds(timeMatch.slice(5, 9));
-          const text = lines.slice(2).join(' ');
-
-          entries.push({ start, end, text });
-        }
-      }
-      return entries;
+        const [start, end] = lines[1].split(' --> ').map(timeToSeconds);
+        const text = lines.slice(2).join(' ');
+        return { start, end, text };
+      });
     }
 
-    function toSeconds(parts) {
-      const [hh, mm, ss, ms] = parts.map(Number);
-      return hh * 3600 + mm * 60 + ss + ms / 1000;
+    function timeToSeconds(time) {
+      const [h, m, s] = time.split(/[:,]/);
+      return (+h) * 3600 + (+m) * 60 + (+s) + (+time.split(',')[1] || 0) / 1000;
     }
 
-    // Highlight and wrap tooltip words
-    function applyTooltips(text) {
-      const words = text.split(/\s+/);
-      return words.map(word => {
-        const cleanWord = word.replace(/[^a-zA-Z]/g, "").toLowerCase();
-        if (tooltipDictionary[cleanWord]) {
-          return `<span class="highlight" onclick="pauseVideo(event)">
-                    ${word}
-                    <span class="tooltip">${tooltipDictionary[cleanWord]}</span>
-                  </span>`;
-        }
-        return word;
-      }).join(' ');
-    }
-
-    // Display subtitle based on current time
+    // Update subtitles in sync with video
     video.addEventListener('timeupdate', () => {
-      const currentTime = video.currentTime;
-      const currentSubtitle = subtitles.find(sub => currentTime >= sub.start && currentTime <= sub.end);
-      if (currentSubtitle) {
-        subtitleDiv.innerHTML = applyTooltips(currentSubtitle.text);
+      const current = video.currentTime;
+      const subtitle = subtitles.find(s => current >= s.start && current <= s.end);
+      if (subtitle) {
+        subtitleBox.innerHTML = formatSubtitle(subtitle.text);
       } else {
-        subtitleDiv.innerHTML = '';
+        subtitleBox.innerHTML = '';
       }
     });
 
-    // Pause video on tooltip click
-    function pauseVideo(event) {
-      event.stopPropagation();
-      video.pause();
-      const tooltip = event.currentTarget.querySelector('.tooltip');
-      if (tooltip) {
-        tooltip.style.display = 'block';
-      }
+    function formatSubtitle(text) {
+      const words = text.split(/\s+/);
+      return words.map(word => {
+        const cleanWord = word.replace(/[.,?!]/g, '').toLowerCase();
+        if (tooltipDict[cleanWord]) {
+          return `<span class="highlight" onclick="pauseAndShowTooltip(event)">
+            ${word}<span class="tooltip">${tooltipDict[cleanWord]}</span>
+          </span>`;
+        } else {
+          return word;
+        }
+      }).join(' ');
     }
-  </script>
 
+    window.pauseAndShowTooltip = function (event) {
+      video.pause();
+
+      // Reset all previous highlights
+      document.querySelectorAll('.highlight').forEach(el => el.classList.remove('active'));
+
+      // Show tooltip on clicked word
+      const el = event.currentTarget;
+      el.classList.add('active');
+
+      // Prevent bubbling
+      event.stopPropagation();
+    };
+
+    // Hide tooltips when clicking outside
+    document.addEventListener('click', () => {
+      document.querySelectorAll('.highlight').forEach(el => el.classList.remove('active'));
+    });
+  </script>
 </body>
 </html>
