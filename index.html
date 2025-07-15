@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Interactive Subtitles with Sidebar</title>
+  <meta charset="UTF-8" />
+  <title>Dynamic Subtitles with Sidebar Definitions</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #111;
-      color: #fff;
       margin: 0;
+      font-family: sans-serif;
+      background: #111;
+      color: white;
       display: flex;
       height: 100vh;
     }
@@ -18,17 +18,20 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: start;
       padding: 20px;
     }
 
     video {
       width: 80%;
+      max-width: 800px;
     }
 
     #subtitle-container {
       margin-top: 20px;
-      font-size: 1.2em;
+      font-size: 1.2rem;
       text-align: center;
+      min-height: 2em;
     }
 
     .highlight {
@@ -39,18 +42,16 @@
 
     .tooltip {
       visibility: hidden;
-      background-color: rgba(0, 0, 0, 0.8);
+      background-color: rgba(0, 0, 0, 0.85);
       color: #fff;
-      padding: 6px;
+      padding: 5px 10px;
       border-radius: 6px;
       position: absolute;
       bottom: 125%;
       left: 50%;
       transform: translateX(-50%);
-      width: max-content;
-      max-width: 200px;
       white-space: pre-wrap;
-      z-index: 1;
+      z-index: 2;
     }
 
     .highlight:hover .tooltip {
@@ -60,18 +61,19 @@
     #sidebar {
       width: 300px;
       background: #222;
-      border-left: 1px solid #444;
       padding: 20px;
+      border-left: 1px solid #444;
       overflow-y: auto;
     }
 
     #definition-box h3 {
       margin-top: 0;
-      font-size: 1.3em;
+      font-size: 1.3rem;
     }
 
     #definition-box p {
-      font-size: 1em;
+      font-size: 1rem;
+      line-height: 1.4;
     }
 
     .hidden {
@@ -80,13 +82,11 @@
   </style>
 </head>
 <body>
-
   <div id="main-content">
     <video id="video" controls>
-      <source src="video.mp4" type="video/mp4">
-      Your browser does not support the video tag.
+      <source src="video.mp4" type="video/mp4" />
+      Your browser does not support HTML5 video.
     </video>
-
     <div id="subtitle-container"></div>
   </div>
 
@@ -105,64 +105,75 @@
     const termDefinition = document.getElementById('term-definition');
 
     const tooltipDictionary = {
-      "21": "his age.",
+      "21": "His age.",
       "queen": "the former british monarch.",
-      "hello": "A way to greet someone."
+      "hello": "a way to greet someone."
     };
 
+    let subtitles = [];
+    let currentSubtitleIndex = -1;
+
     fetch('subtitles.srt')
-      .then(response => response.text())
+      .then(res => res.text())
       .then(parseSRT)
-      .then(subtitles => {
-        let currentIndex = -1;
-
-        video.addEventListener('timeupdate', () => {
-          const currentTime = video.currentTime;
-          let newIndex = subtitles.findIndex((sub, i) =>
-            currentTime >= sub.start && currentTime <= sub.end
-          );
-
-          if (newIndex !== currentIndex) {
-            currentIndex = newIndex;
-            subtitleContainer.innerHTML = newIndex !== -1
-              ? highlightWords(subtitles[newIndex].text)
-              : '';
-            attachTooltipAndClickEvents();
-          }
-        });
+      .then(data => {
+        subtitles = data;
+        video.addEventListener('timeupdate', updateSubtitle);
       });
 
     function parseSRT(data) {
-      const subtitles = [];
-      const entries = data.split('\n\n');
-      const timeReg = /(\d{2}):(\d{2}):(\d{2}),(\d{3})/g;
+      const blocks = data.split('\n\n');
+      const result = [];
 
-      for (let entry of entries) {
-        const lines = entry.split('\n').filter(Boolean);
-        if (lines.length >= 2) {
-          const [_, startH, startM, startS, startMs, endH, endM, endS, endMs] = [...lines[1].matchAll(timeReg)][0].concat([...lines[1].matchAll(timeReg)][1] || []);
-          const start = (+startH) * 3600 + (+startM) * 60 + (+startS) + (+startMs) / 1000;
-          const end = (+endH) * 3600 + (+endM) * 60 + (+endS) + (+endMs) / 1000;
+      for (let block of blocks) {
+        const lines = block.split('\n').filter(Boolean);
+        if (lines.length >= 3) {
+          const timeMatch = lines[1].match(/(\d+):(\d+):(\d+),(\d+)\s-->\s(\d+):(\d+):(\d+),(\d+)/);
+          if (!timeMatch) continue;
+
+          const start =
+            parseInt(timeMatch[1]) * 3600 +
+            parseInt(timeMatch[2]) * 60 +
+            parseInt(timeMatch[3]) +
+            parseInt(timeMatch[4]) / 1000;
+          const end =
+            parseInt(timeMatch[5]) * 3600 +
+            parseInt(timeMatch[6]) * 60 +
+            parseInt(timeMatch[7]) +
+            parseInt(timeMatch[8]) / 1000;
+
           const text = lines.slice(2).join(' ');
-          subtitles.push({ start, end, text });
+          result.push({ start, end, text });
         }
       }
-
-      return subtitles;
+      return result;
     }
 
-    function highlightWords(text) {
+    function updateSubtitle() {
+      const time = video.currentTime;
+      const nextIndex = subtitles.findIndex((sub, i) => time >= sub.start && time <= sub.end);
+
+      if (nextIndex !== currentSubtitleIndex) {
+        currentSubtitleIndex = nextIndex;
+        subtitleContainer.innerHTML = nextIndex === -1
+          ? ''
+          : renderSubtitle(subtitles[nextIndex].text);
+        addClickListeners();
+      }
+    }
+
+    function renderSubtitle(text) {
       const words = text.split(/\s+/);
       return words.map(word => {
-        const cleanWord = word.replace(/[.,?!]/g, '').toLowerCase();
-        if (tooltipDictionary[cleanWord]) {
-          return `<span class="highlight" data-term="${cleanWord}">${word}<span class="tooltip">${tooltipDictionary[cleanWord]}</span></span>`;
+        const clean = word.replace(/[.,?!]/g, '').toLowerCase();
+        if (tooltipDictionary[clean]) {
+          return `<span class="highlight" data-term="${clean}">${word}<span class="tooltip">${tooltipDictionary[clean]}</span></span>`;
         }
         return word;
       }).join(' ');
     }
 
-    function attachTooltipAndClickEvents() {
+    function addClickListeners() {
       document.querySelectorAll('.highlight').forEach(span => {
         const term = span.dataset.term;
         span.addEventListener('click', () => {
@@ -173,9 +184,13 @@
     }
 
     function showDefinition(term, definition) {
-      termTitle.textContent = term.charAt(0).toUpperCase() + term.slice(1);
+      termTitle.textContent = capitalize(term);
       termDefinition.textContent = definition;
       definitionBox.classList.remove('hidden');
+    }
+
+    function capitalize(str) {
+      return str.charAt(0).toUpperCase() + str.slice(1);
     }
   </script>
 </body>
